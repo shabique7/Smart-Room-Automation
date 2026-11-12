@@ -50,14 +50,7 @@ button {
 <h2>Smart Room Automation</h2>
 
 <div class="card">
-  <h3>Select Member</h3>
-  <select id="member">
-    <option value="1">Member 1</option>
-    <option value="2">Member 2</option>
-    <option value="3">Member 3</option>
-    <option value="4">Member 4</option>
-  </select>
-
+  <h3 id="memberName">Loading member...</h3>
   <p>MQTT: <span id="connection">Connecting...</span></p>
 </div>
 
@@ -95,17 +88,19 @@ let commandTopic = "";
 let stateTopic = "";
 
 // SELECT MEMBER
+const params = new URLSearchParams(window.location.search);
+const member = params.get("member") || "1";
 
+if (!["1", "2", "3", "4"].includes(member)) {
+  throw new Error("Invalid member number");
+}
+
+document.getElementById("memberName").innerText =
+  "Member " + member;
 function updateTopics() {
 
-  const member =
-    document.getElementById("member").value;
-
-  commandTopic =
-    ROOT + "/member/" + member + "/cmd";
-
-  stateTopic =
-    ROOT + "/member/" + member + "/state";
+  commandTopic = ROOT + "/member/" + member + "/cmd";
+  stateTopic = ROOT + "/member/" + member + "/state";
 
   if (connected) {
     client.subscribe(stateTopic);
