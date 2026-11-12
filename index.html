@@ -1,0 +1,263 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Smart Room Automation</title>
+
+<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+
+<style>
+body {
+  background: #101827;
+  color: white;
+  font-family: Arial;
+  padding: 20px;
+  max-width: 450px;
+  margin: auto;
+}
+.card {
+  background: #1d2a3e;
+  padding: 20px;
+  border-radius: 14px;
+  margin: 16px 0;
+}
+button, select {
+  width: 100%;
+  padding: 14px;
+  margin-top: 12px;
+  border-radius: 9px;
+  border: none;
+  font-size: 16px;
+}
+button {
+  background: #168b67;
+  color: white;
+  cursor: pointer;
+}
+.output {
+  background: #101827;
+  padding: 12px;
+  border-radius: 8px;
+  overflow-wrap: anywhere;
+}
+</style>
+</head>
+
+<body>
+
+<h2>Smart Room Automation</h2>
+
+<div class="card">
+  <h3>Select Member</h3>
+  <select id="member">
+    <option value="1">Member 1</option>
+    <option value="2">Member 2</option>
+    <option value="3">Member 3</option>
+    <option value="4">Member 4</option>
+  </select>
+
+  <p>MQTT: <span id="connection">Connecting...</span></p>
+</div>
+
+<div class="card">
+  <h3>Voice Control</h3>
+
+  <button onclick="startVoice()">🎤 Speak Command</button>
+
+  <p>Recognized speech:</p>
+  <div class="output" id="transcript">Waiting...</div>
+
+  <p>Command status:</p>
+  <div class="output" id="result">No command yet</div>
+</div>
+
+<div class="card">
+  <h3>Appliance Status</h3>
+  <p>Light: <span id="light">Unknown</span></p>
+  <p>Fan: <span id="fan">Unknown</span></p>
+</div>
+
+<script>
+
+// MQTT CONFIGURATION
+
+const ROOT =
+"smartroom/kuet-room-7f3a91c2";
+
+const client = mqtt.connect(
+  "wss://broker.emqx.io:8084/mqtt"
+);
+
+let connected = false;
+let commandTopic = "";
+let stateTopic = "";
+
+// SELECT MEMBER
+
+function updateTopics() {
+
+  const member =
+    document.getElementById("member").value;
+
+  commandTopic =
+    ROOT + "/member/" + member + "/cmd";
+
+  stateTopic =
+    ROOT + "/member/" + member + "/state";
+
+  if (connected) {
+    client.subscribe(stateTopic);
+  }
+}
+
+document.getElementById("member")
+.addEventListener("change", updateTopics);
+
+// MQTT CONNECTION
+
+client.on("connect", function() {
+
+  connected = true;
+
+  document.getElementById("connection")
+    .innerText = "Connected";
+
+  updateTopics();
+});
+
+client.on("close", function() {
+
+  connected = false;
+
+  document.getElementById("connection")
+    .innerText = "Disconnected";
+});
+
+client.on("error", function(error) {
+  console.error(error);
+});
+
+// RECEIVE STATUS
+
+client.on("message", function(topic, message) {
+
+  if (topic !== stateTopic) return;
+
+  try {
+    const state = JSON.parse(message.toString());
+
+    document.getElementById("light").innerText =
+      state.light ? "ON" : "OFF";
+
+    document.getElementById("fan").innerText =
+      state.fan ? "ON" : "OFF";
+
+  } catch(error) {
+    console.error(error);
+  }
+});
+
+// SEND COMMAND
+
+function sendCommand(command) {
+
+  if (!connected) {
+    document.getElementById("result")
+      .innerText = "MQTT disconnected";
+    return;
+  }
+
+  client.publish(commandTopic, command);
+
+  document.getElementById("result")
+    .innerText = "Sent: " + command;
+}
+
+// PROCESS NATURAL LANGUAGE
+
+function processVoice(text) {
+
+  const t = text.toLowerCase().trim();
+
+  if (/\bhello\b/.test(t)) {
+    sendCommand("LIGHT_ON");
+  }
+  else {
+    document.getElementById("result")
+      .innerText = "Say Hello to turn on the light";
+  }
+}
+
+
+// SPEECH RECOGNITION
+
+function startVoice() {
+
+  const SpeechRecognition =
+    window.SpeechRecognition ||
+    window.webkitSpeechRecognition;
+
+  if (!SpeechRecognition) {
+    alert("Use Google Chrome on Android for speech recognition.");
+    return;
+  }
+
+  const recognition = new SpeechRecognition();
+
+  recognition.lang = "en-US";
+  recognition.continuous = false;
+  recognition.interimResults = false;
+
+  recognition.onstart = function() {
+    document.getElementById("transcript")
+      .innerText = "Listening...";
+  };
+
+  recognition.onresult = function(event) {
+
+    const speech =
+      event.results[0][0].transcript;
+
+    document.getElementById("transcript")
+      .innerText = speech;
+
+    processVoice(speech);
+  };
+    recognition.onnomatch = function() {
+    document.getElementById("result")
+        .innerText = "Speech not recognized. Try again.";
+    };
+
+    recognition.onend = function() {
+    if (document.getElementById("transcript").innerText === "Listening...") {
+        document.getElementById("result")
+        .innerText = "No speech result received. Check microphone.";
+    }
+    };
+    recognition.onerror = function(event) {
+    document.getElementById("result")
+        .innerText = "Speech error: " + event.error;
+    };
+
+    recognition.onend = function() {
+    console.log("Speech recognition ended");
+    };
+
+    try {
+    recognition.start();
+    } catch(error) {
+    document.getElementById("result")
+        .innerText = "Could not start microphone: " + error.message;
+    }
+}
+
+// INITIALIZE
+
+updateTopics();
+
+</script>
+
+</body>
+</html>
